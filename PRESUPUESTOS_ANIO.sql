@@ -1,23 +1,24 @@
 --- Santiago González González
 
 CREATE OR REPLACE VIEW vistaEmpPres AS
-SELECT e.emp_no, e.apellido, (e.salario * 14 + e.comision) AS salarioAnual, e.dept_no, (p.importe * 0.5) AS limiteSalarioDept
+SELECT e.emp_no, e.apellido, e.salario, e.comision, e.dept_no, (p.importe * 0.5) AS limiteSalarioDept
 FROM empleados e, presupuestos p
 WHERE e.dept_no = p.dept_no;
+
 
 CREATE OR REPLACE TRIGGER gestionEmpPresupuesto
     INSTEAD OF INSERT OR UPDATE
     ON vistaEmpPres
     FOR EACH ROW
 DECLARE 
-    vSumaSalarios NUMBER;
+    vSumaSalariosAnuales NUMBER;
     vPresupuesto NUMBER;
 BEGIN
-    
+
     IF INSERTING THEN
         IF :NEW.emp_no IS NOT NULL THEN
             INSERT INTO empleados (emp_no, apellido, salario, comision, dept_no)
-            VALUES (:NEW.emp_no, :NEW.apellido, :NEW.salarioAnual / 14, 0, :NEW.dept_no);
+            VALUES (:NEW.emp_no, :NEW.apellido, :NEW.salario, :NEW.comision, :NEW.dept_no);
         END IF;
 
         IF :NEW.limiteSalarioDept IS NOT NULL THEN
@@ -26,10 +27,12 @@ BEGIN
         END IF;
 
     ELSIF UPDATING THEN
-        IF UPDATING('salarioAnual') THEN
-            UPDATE empleados
-            SET salario = :NEW.salarioAnual / 14
-            WHERE emp_no = :NEW.emp_no;
+        IF UPDATING('salario') THEN
+            UPDATE empleados SET salario = :NEW.salario WHERE emp_no = :NEW.emp_no;
+        END IF;
+        
+        IF UPDATING('comision') THEN
+            UPDATE empleados SET comision = :NEW.comision WHERE emp_no = :NEW.emp_no;
         END IF;
         
         IF UPDATING('limiteSalarioDept') THEN
@@ -40,7 +43,7 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT NVL(SUM(salario * 14 + NVL(comision, 0)), 0) INTO vSumaSalarios
+    SELECT NVL(SUM(salario * 14 + NVL(comision, 0)), 0) INTO vSumaSalariosAnuales
     FROM empleados
     WHERE dept_no = :NEW.dept_no;
 
@@ -49,8 +52,8 @@ BEGIN
     WHERE dept_no = :NEW.dept_no
       AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
 
-    IF vSumaSalarios > (vPresupuesto * 0.5) THEN 
-        RAISE_APPLICATION_ERROR(-20006, 'Operación denegada: Los salarios del departamento superan el 50% del presupuesto disponible.');
+    IF vSumaSalariosAnuales > (vPresupuesto * 0.5) THEN 
+        RAISE_APPLICATION_ERROR(-20006, 'Operación denegada: El coste anual supera el 50% del presupuesto.');
     END IF;
 END;
 /
