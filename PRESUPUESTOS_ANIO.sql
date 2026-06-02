@@ -20,20 +20,20 @@ BEGIN
     SELECT NVL(SUM(salario * 14 + NVL(comision, 0)), 0)
     INTO vGastoActual
     FROM EMPLEADOS
-    WHERE dept_no = :NEW.dept_no;
+    WHERE dept_no = :new.dept_no;
 
     SELECT NVL(MAX(IMPORTE), 0)
     INTO vPresupuesto
     FROM PRESUPUESTOS
-    WHERE dept_no = :NEW.dept_no
+    WHERE dept_no = :new.dept_no
       AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
 
     IF INSERTING THEN
-        vGastoNuevo := vGastoActual + (:NEW.salario * 14 + NVL(:NEW.comision, 0));
+        vGastoNuevo := vGastoActual + (:new.salario * 14 + NVL(:new.comision, 0));
     ELSIF UPDATING THEN
         vGastoNuevo := vGastoActual
-                     - (:OLD.salario * 14 + NVL(:OLD.comision, 0))
-                     + (:NEW.salario * 14 + NVL(:NEW.comision, 0));
+                     - (:old.salario * 14 + NVL(:old.comision, 0))
+                     + (:new.salario * 14 + NVL(:new.comision, 0));
     END IF;
 
     IF vGastoNuevo > (vPresupuesto * 0.5) THEN
@@ -42,11 +42,11 @@ BEGIN
 
     IF INSERTING THEN
         INSERT INTO EMPLEADOS (emp_no, apellido, salario, comision, dept_no)
-        VALUES (:NEW.emp_no, :NEW.apellido, :NEW.salario, :NEW.comision, :NEW.dept_no);
+        VALUES (:new.emp_no, :new.apellido, :new.salario, :new.comision, :new.dept_no);
     ELSIF UPDATING THEN
         UPDATE EMPLEADOS
-        SET salario = :NEW.salario, comision = :NEW.comision
-        WHERE emp_no = :NEW.emp_no;
+        SET salario = :new.salario, comision = :new.comision
+        WHERE emp_no = :new.emp_no;
     END IF;
 END;
 /
