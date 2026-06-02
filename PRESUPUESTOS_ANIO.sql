@@ -1,83 +1,52 @@
-CREATE OR REPLACE TRIGGER empPresupuesto
-    BEFORE INSERT OR UPDATE 
-    OF SALARIO, DEPT_NO
-    ON EMPLEADOS
-    FOR EACH ROW
-DECLARE 
-    limite NUMBER;
-    actual NUMBER;
-
-BEGIN
-    BEGIN
-        SELECT (importe * 0.5) INTO limite
-        FROM PRESUPUESTOS
-        WHERE DEPT_NO = :new.DEPT_NO
-            AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
-        EXCEPTION
-            WHEN NO_DATA_FOUND THEN
-                limite := 0;
-    END;
-
-    SELECT NVL(SUM(salario), 0) INTO actual
-    FROM EMPLEADOS 
-    WHERE DEPT_NO = :new.DEPT_NO
-        AND EMP_NO <> NVL(:new.EMP_NO, -1);
-
-    IF (actual + new.salario) > limite THEN 
-        RAISE_APPLICATION_ERROR()
-
-END;
-
-
-
-
-
-CREATE OR REPLACE TRIGGER empPresupuesto
-    AFTER INSERT OR UPDATE 
-    ON EMPLEADOS
-DECLARE 
-    errores NUMBER;
-
-BEGIN
-    SELECT COUNT(*) INTO errores
-    FROM (
-        SELECT e.dept_no
-        FROM empleados e, presupuestos p
-        WHERE e.dept_no = p.dept_no
-            AND p.anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'))
-        GROUP BY e.dept_no, p.importe
-        HAVING SUM(e.salario) > (p.importe * 0.5)
-    );
-
-    IF errores > 0 THEN 
-        RAISE_APPLICATION_ERROR(-2001, 'El salario no puede exceder el 50% del presupuesto actual.')
-    END IF;
-END;
+--- Santiago González González
 
 CREATE OR REPLACE VIEW vistaEmpPres AS
-SELECT e.emp_no, e.apellido, e.salario, e.dept_no, (p.importe * 0.5) AS limiteSalarioDept
+SELECT e.emp_no, e.apellido, (e.salario * 14 + e.comision) AS salarioAnual, e.dept_no, (p.importe * 0.5) AS limiteSalarioDept
 FROM empleados e, presupuestos p
-WHERE e.dept_no = p.dept_no
+WHERE e.dept_no = p.dept_no;
 
-
-CREATE OR REPLACE TRIGGER presLimite
-    AFTER INSERT OR UPDATE 
-    ON PRESUPUESTOS
+CREATE OR REPLACE TRIGGER empPresupuesto
+    INSTEAD OF INSERT
+    ON vistaEmpPres
+    FOR EACH ROW
 DECLARE 
-    errores NUMBER;
-
+    v_suma_salarios NUMBER;
+    v_presupuesto NUMBER;
 BEGIN
-    SELECT COUNT(*) INTO errores
-    FROM (
-        SELECT e.dept_no
-        FROM empleados e, presupuestos p
-        WHERE e.dept_no = p.dept_no
-            AND p.anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'))
-        GROUP BY e.dept_no, p.importe
-        HAVING SUM(e.salario) > (p.importe * 0.5)
-    );
+    SELECT NVL(SUM(salario * 14 + NVL(comision, 0)), 0) INTO v_suma_salarios
+    FROM empleados
+    WHERE dept_no = :NEW.dept_no;
 
-    IF errores > 0 THEN 
-        RAISE_APPLICATION_ERROR(-2002, 'El nuevo presupuesto no cubre el doble de los salarios actuales.')
+    SELECT NVL(importe, 0) INTO v_presupuesto
+    FROM presupuestos
+    WHERE dept_no = :NEW.dept_no
+      AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
+
+    IF v_suma_salarios > (v_presupuesto * 0.5) THEN 
+        RAISE_APPLICATION_ERROR(-20006, 'El salario no puede exceder el 50% del presupuesto actual.');
     END IF;
 END;
+/
+
+CREATE OR REPLACE TRIGGER presLimite
+    INSTEAD OF UPDATE
+    ON vistaEmpPres
+    FOR EACH ROW
+DECLARE 
+    v_suma_salarios NUMBER;
+    v_presupuesto NUMBER;
+BEGIN
+    SELECT NVL(SUM(salario * 14 + NVL(comision, 0)), 0) INTO v_suma_salarios
+    FROM empleados
+    WHERE dept_no = :NEW.dept_no;
+
+    SELECT NVL(importe, 0) INTO v_presupuesto
+    FROM presupuestos
+    WHERE dept_no = :NEW.dept_no
+      AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
+
+    IF v_suma_salarios > (v_presupuesto * 0.5) THEN 
+        RAISE_APPLICATION_ERROR(-20007, 'El nuevo presupuesto no cubre el doble de los salarios actuales.');
+    END IF;
+END;
+/
