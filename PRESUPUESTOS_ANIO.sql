@@ -53,7 +53,7 @@ BEGIN
       AND anio = TO_NUMBER(TO_CHAR(SYSDATE, 'YYYY'));
 
     IF vSumaSalariosAnuales > (vPresupuesto * 0.5) THEN 
-        RAISE_APPLICATION_ERROR(-20006, 'Operación denegada: El coste anual supera el 50% del presupuesto.');
+        RAISE_APPLICATION_ERROR(-20006, 'El coste anual no puede superar el 50% del presupuesto.');
     END IF;
 END;
 /
